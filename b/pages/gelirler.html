@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Gelirler</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<div class="topbar"><div class="topbar-left"><a href="panel.html" class="back-btn">← Geri</a><h1>💰 Gelirler</h1></div><button class="btn-logout" onclick="logout()">Çıkış</button></div>
+<div class="container">
+  <a href="gelir-ekle.html" class="btn btn-success btn-block mb-1">+ Yeni Gelir Ekle</a>
+  <div id="listDiv"><div class="loading"><div class="spinner"></div></div></div>
+</div>
+<div class="modal-overlay" id="mo">
+  <div class="modal">
+    <div class="modal-title"><span>Geliri Düzenle</span><button class="modal-close" onclick="cm()">✕</button></div>
+    <input type="hidden" id="eid">
+    <div class="form-group"><label>Başlık</label><input type="text" id="eb" class="form-control"></div>
+    <div class="form-group"><label>Tutar (₺)</label><input type="number" id="et" class="form-control" step="0.01"></div>
+    <div class="form-group"><label>Tarih</label><input type="date" id="ed" class="form-control"></div>
+    <div class="form-group"><label>Açıklama</label><textarea id="ea" class="form-control" rows="2"></textarea></div>
+    <div class="flex gap-1"><button class="btn btn-success flex-1" onclick="saveEdit()">💾 Kaydet</button><button class="btn btn-secondary flex-1" onclick="cm()">İptal</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+function load(){
+  const rows=DB.get('gelirler').sort((a,b)=>b.tarih.localeCompare(a.tarih));
+  if(!rows.length){document.getElementById('listDiv').innerHTML='<div class="empty-state"><span class="icon">💰</span><p>Gelir yok</p></div>';return;}
+  let t=0;
+  let h='<div class="card"><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Başlık</th><th>Tutar</th><th>Açıklama</th><th>İşlem</th></tr></thead><tbody>';
+  rows.forEach(r=>{t+=r.tutar;h+=`<tr><td style="font-size:11px">${r.tarih}</td><td style="font-size:12px">${r.baslik}</td><td class="text-success">₺${r.tutar.toFixed(2)}</td><td style="font-size:11px">${r.aciklama||''}</td><td><div class="actions"><button class="btn btn-warning btn-icon" onclick="edit(${r.id})">✏️</button><button class="btn btn-danger btn-icon" onclick="del(${r.id})">🗑️</button></div></td></tr>`;});
+  h+=`</tbody></table></div><div class="divider"></div><div class="sum-row"><span>Toplam:</span><span class="text-success">₺${t.toFixed(2)}</span></div></div>`;
+  document.getElementById('listDiv').innerHTML=h;
+}
+function edit(id){const r=DB.findOne('gelirler',x=>x.id==id);document.getElementById('eid').value=id;document.getElementById('eb').value=r.baslik;document.getElementById('et').value=r.tutar;document.getElementById('ed').value=r.tarih;document.getElementById('ea').value=r.aciklama||'';document.getElementById('mo').classList.add('active');}
+function saveEdit(){const id=parseInt(document.getElementById('eid').value);DB.update('gelirler',id,{baslik:document.getElementById('eb').value,tutar:parseFloat(document.getElementById('et').value),tarih:document.getElementById('ed').value,aciklama:document.getElementById('ea').value});showToast('Güncellendi ✅','success');cm();load();}
+function del(id){if(!confirm('Silinsin mi?'))return;DB.delete('gelirler',id);showToast('Silindi','success');load();}
+function cm(){document.getElementById('mo').classList.remove('active');}
+load();
+</script>
+</body></html>

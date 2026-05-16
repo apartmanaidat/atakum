@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Raporlar</title><link rel="stylesheet" href="../css/style.css">
+<style>@media print{.topbar,.no-print{display:none!important;}.container{padding:0;}.card{box-shadow:none;border:1px solid #eee;}}</style>
+</head>
+<body>
+<div class="topbar no-print"><div class="topbar-left"><a href="panel.html" class="back-btn">← Geri</a><h1>📊 Raporlar</h1></div><button class="btn-logout" onclick="logout()">Çıkış</button></div>
+<div class="container">
+  <div class="card no-print">
+    <div class="card-title">🔍 Tarih Aralığı</div>
+    <div class="filter-row">
+      <input type="date" id="bas" class="form-control">
+      <input type="date" id="bit" class="form-control">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="load()">Filtrele</button>
+  </div>
+  <div class="flex gap-1 mb-1 no-print">
+    <button class="btn btn-secondary flex-1" onclick="window.print()">🖨️ Yazdır / PDF</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💰 Gelirler</div>
+    <div id="gelirDiv"></div>
+    <div class="divider"></div>
+    <div class="sum-row"><span>Toplam Gelir:</span><span id="tGelir" class="text-success">-</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 Giderler</div>
+    <div id="giderDiv"></div>
+    <div class="divider"></div>
+    <div class="sum-row"><span>Toplam Gider:</span><span id="tGider" class="text-danger">-</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏦 Kasa Durumu</div>
+    <div class="sum-row"><span>Toplam Gelir:</span><span id="kGelir" class="text-success">-</span></div>
+    <div class="sum-row"><span>Toplam Gider:</span><span id="kGider" class="text-danger">-</span></div>
+    <div class="sum-row"><span style="font-weight:900">Net Kasa:</span><span id="netKasa" style="font-size:17px;font-weight:900">-</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📄 Aidat Özeti (Başlangıç Tarihinden İtibaren)</div>
+    <div id="aidatOzet"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">👥 Sakin Borç Durumu</div>
+    <div id="sakinBorc"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+const ayar=getAyarlar();
+
+function load(){
+  const bas=document.getElementById('bas').value;
+  const bit=document.getElementById('bit').value;
+
+  // GELİRLER
+  let gelirler=DB.get('gelirler');
+  if(bas)gelirler=gelirler.filter(g=>g.tarih>=bas);
+  if(bit)gelirler=gelirler.filter(g=>g.tarih<=bit);
+  gelirler.sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  let tGelir=0;
+  let gH=gelirler.length?'<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Başlık</th><th>Tutar</th><th>Açıklama</th></tr></thead><tbody>':'<p class="text-muted">Kayıt yok</p>';
+  gelirler.forEach(r=>{tGelir+=r.tutar;gH+=`<tr><td>${r.tarih}</td><td>${r.baslik}</td><td class="text-success">₺${r.tutar.toFixed(2)}</td><td style="font-size:11px">${r.aciklama||''}</td></tr>`;});
+  if(gelirler.length)gH+='</tbody></table></div>';
+  document.getElementById('gelirDiv').innerHTML=gH;
+  document.getElementById('tGelir').textContent=formatTL(tGelir);
+
+  // GİDERLER
+  let giderler=DB.get('giderler');
+  if(bas)giderler=giderler.filter(g=>g.tarih>=bas);
+  if(bit)giderler=giderler.filter(g=>g.tarih<=bit);
+  giderler.sort((a,b)=>a.tarih.localeCompare(b.tarih));
+  let tGider=0;
+  let grH=giderler.length?'<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Kategori</th><th>Tutar</th><th>Açıklama</th></tr></thead><tbody>':'<p class="text-muted">Kayıt yok</p>';
+  giderler.forEach(r=>{tGider+=r.tutar;grH+=`<tr><td>${r.tarih}</td><td>${r.kategori}</td><td class="text-danger">₺${r.tutar.toFixed(2)}</td><td style="font-size:11px">${r.aciklama||''}</td></tr>`;});
+  if(giderler.length)grH+='</tbody></table></div>';
+  document.getElementById('giderDiv').innerHTML=grH;
+  document.getElementById('tGider').textContent=formatTL(tGider);
+
+  // KASA
+  const net=tGelir-tGider;
+  document.getElementById('kGelir').textContent=formatTL(tGelir);
+  document.getElementById('kGider').textContent=formatTL(tGider);
+  const ne=document.getElementById('netKasa');
+  ne.textContent=formatTL(net);
+  ne.className=net>=0?'text-success':'text-danger';
+
+  // AİDAT ÖZETİ — Sanal hesaplama (başlangıçtan bugüne, kayıt olmasa da tahakkuk)
+  const sakinlerTum = DB.find('users', u => u.rol === 'sakin');
+  let aOd=0,aKis=0,aBek=0,aToplam=0,aOdenen=0, aSatirSay=0;
+  sakinlerTum.forEach(s => {
+    const satirlar = getSakinBorcDetay(s.id);
+    satirlar.forEach(r => {
+      aToplam  += r.tutar;
+      aOdenen  += r.odenen;
+      aSatirSay++;
+      if (r.durum==='odendi')      aOd++;
+      else if (r.durum==='kismi')  aKis++;
+      else                         aBek++;
+    });
+  });
+  document.getElementById('aidatOzet').innerHTML=`
+    <div class="sum-row"><span>Toplam Aidat Satırı:</span><span>${aSatirSay}</span></div>
+    <div class="sum-row"><span>✅ Ödendi:</span><span class="text-success">${aOd}</span></div>
+    <div class="sum-row"><span>⏳ Kısmi:</span><span style="color:var(--warning)">${aKis}</span></div>
+    <div class="sum-row"><span>✗ Beklemede:</span><span class="text-danger">${aBek}</span></div>
+    <div class="sum-row"><span>Toplam Tahakkuk:</span><span>${formatTL(aToplam)}</span></div>
+    <div class="sum-row"><span>Toplam Tahsilat:</span><span class="text-success">${formatTL(aOdenen)}</span></div>
+    <div class="sum-row"><span>Toplam Alacak:</span><span class="text-danger">${formatTL(aToplam-aOdenen)}</span></div>
+  `;
+
+  // SAKİN BORÇ DURUMU — Doğru hesaplama (başlangıçtan bugüne)
+  const sakinler=DB.find('users',u=>u.rol==='sakin').sort((a,b)=>a.daire_no-b.daire_no);
+  let sbH='<div class="table-wrap"><table><thead><tr><th>Daire</th><th>Ad Soyad</th><th>Toplam Aidat</th><th>Ödenen</th><th>Kalan</th><th>Durum</th></tr></thead><tbody>';
+  sakinler.forEach(s=>{
+    const satirlar = getSakinBorcDetay(s.id);
+    let st=0,so=0,sk=0;
+    satirlar.forEach(r=>{st+=r.tutar;so+=r.odenen;sk+=r.kalan;});
+    const dur=sk<=0?'<span class="badge badge-success">✅ Temiz</span>':sk<st?'<span class="badge badge-warning">⏳ Kısmi</span>':'<span class="badge badge-danger">✗ Borçlu</span>';
+    sbH+=`<tr><td><b>${s.daire_no}</b></td><td style="font-size:11px">${s.ad_soyad}</td><td>₺${st.toFixed(0)}</td><td class="text-success">₺${so.toFixed(0)}</td><td class="${sk>0?'text-danger':'text-success'}">₺${sk.toFixed(0)}</td><td>${dur}</td></tr>`;
+  });
+  sbH+='</tbody></table></div>';
+  document.getElementById('sakinBorc').innerHTML=sbH;
+}
+load();
+</script>
+</body></html>

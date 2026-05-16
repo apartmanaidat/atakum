@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ayarlar</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="panel.html" class="back-btn">← Geri</a>
+    <h1>⚙️ Ayarlar</h1>
+  </div>
+  <button class="btn-logout" onclick="logout()">Çıkış</button>
+</div>
+
+<div class="container">
+
+  <!-- Genel Ayarlar -->
+  <div class="card">
+    <div class="card-title">🏢 Genel Ayarlar</div>
+    <div class="form-group">
+      <label>Apartman Adı</label>
+      <input type="text" id="aptAdi" class="form-control" placeholder="Apartman adı">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveGenel()">💾 Kaydet</button>
+  </div>
+
+  <!-- Sistem Başlangıç Tarihi -->
+  <div class="card">
+    <div class="card-title">📅 Sistem Başlangıç Tarihi</div>
+    <p class="text-muted mb-2">
+      Borç hesabı ve kasa raporları bu tarihten itibaren başlar. Sakinlerin aidat borçları bu aydan itibaren oluşturulur.
+    </p>
+    <div class="flex gap-1">
+      <div class="form-group flex-1">
+        <label>Başlangıç Yılı</label>
+        <input type="number" id="basYil" class="form-control" placeholder="2025" min="2020" max="2030">
+      </div>
+      <div class="form-group flex-1">
+        <label>Başlangıç Ayı</label>
+        <select id="basAy" class="form-control">
+          <option value="1">Ocak</option><option value="2">Şubat</option>
+          <option value="3">Mart</option><option value="4">Nisan</option>
+          <option value="5">Mayıs</option><option value="6">Haziran</option>
+          <option value="7">Temmuz</option><option value="8">Ağustos</option>
+          <option value="9">Eylül</option><option value="10">Ekim</option>
+          <option value="11">Kasım</option><option value="12">Aralık</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveBaslangic()">💾 Kaydet</button>
+  </div>
+
+  <!-- Aidat Borcu Oluştur -->
+  <div class="card">
+    <div class="card-title">⚡ Toplu Aidat Borcu Oluştur</div>
+    <div id="borcOlusturBilgi" style="background:var(--primary-light);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--primary-dark)"></div>
+    <p class="text-muted mb-2">
+      Başlangıç tarihinden <b>bugüne</b> kadar olan tüm aylar için, tüm sakinlere aidat borcu kaydı oluşturur. Zaten kaydı olan aylar atlanır.
+    </p>
+    <button class="btn btn-success btn-block" onclick="topluBorcOlustur()">⚡ Başlangıçtan Bugüne Toplu Borç Oluştur</button>
+    <div id="borcSonuc" style="display:none;margin-top:10px"></div>
+  </div>
+
+  <!-- Yönetici Şifresi -->
+  <div class="card">
+    <div class="card-title">🔐 Yönetici Şifresi Değiştir</div>
+    <div class="form-group">
+      <label>Yeni Şifre</label>
+      <input type="password" id="yeniSifre" class="form-control" placeholder="Yeni şifre">
+    </div>
+    <div class="form-group">
+      <label>Şifre Tekrar</label>
+      <input type="password" id="yeniSifreTekrar" class="form-control" placeholder="Şifre tekrar">
+    </div>
+    <button class="btn btn-warning btn-block" onclick="changeSifre()">🔐 Şifreyi Değiştir</button>
+  </div>
+
+  <!-- Veri Yönetimi -->
+  <div class="card">
+    <div class="card-title">🗄️ Veri Yönetimi</div>
+    <div class="flex gap-1 mb-1">
+      <button class="btn btn-success flex-1" onclick="exportAllData()">📤 Dışa Aktar (JSON)</button>
+      <button class="btn btn-primary flex-1" onclick="document.getElementById('importFile').click()">📥 İçe Aktar</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importAllData(this.files[0])">
+    <button class="btn btn-danger btn-block" onclick="confirmClear()">🗑️ Tüm Verileri Temizle</button>
+    <p class="text-muted mt-1">
+      Dışa aktarılan JSON dosyasını başka cihaza kopyalayarak verileri taşıyabilirsiniz.
+    </p>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="clearModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⚠️ Emin misiniz?</span>
+      <button class="modal-close" onclick="document.getElementById('clearModal').classList.remove('active')">✕</button>
+    </div>
+    <p style="margin-bottom:16px;color:var(--danger);font-weight:700">Tüm veriler silinecek. Geri alınamaz!</p>
+    <div class="flex gap-1">
+      <button class="btn btn-danger flex-1" onclick="clearAllData()">Evet, Sil</button>
+      <button class="btn btn-secondary flex-1" onclick="document.getElementById('clearModal').classList.remove('active')">İptal</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+// Load current settings
+const a = getAyarlar();
+document.getElementById('aptAdi').value = a.apartmanAdi;
+document.getElementById('basYil').value = a.basYil;
+document.getElementById('basAy').value = a.basAy;
+
+// Bilgi kutusunu doldur
+const now2 = new Date();
+const simdiYil2 = now2.getFullYear(), simdiAy2 = now2.getMonth()+1;
+document.getElementById('borcOlusturBilgi').innerHTML =
+  `📅 Başlangıç: <b>${a.basYil}/${String(a.basAy).padStart(2,'0')}</b> → Bugün: <b>${simdiYil2}/${String(simdiAy2).padStart(2,'0')}</b><br>
+   👥 Tüm sakinlere bu aralıktaki eksik aylar oluşturulacak`;
+
+function saveGenel() {
+  const adi = document.getElementById('aptAdi').value.trim();
+  if(!adi){showToast('Apartman adı boş olamaz','error');return;}
+  setAyarlar({apartmanAdi: adi});
+  showToast('Apartman adı kaydedildi ✅','success');
+}
+
+function saveBaslangic() {
+  const yil = parseInt(document.getElementById('basYil').value);
+  const ay = parseInt(document.getElementById('basAy').value);
+  if(isNaN(yil)||yil<2020){showToast('Geçerli bir yıl girin','error');return;}
+  setAyarlar({basYil:yil, basAy:ay});
+  // Bilgi kutusunu güncelle
+  const now3 = new Date();
+  document.getElementById('borcOlusturBilgi').innerHTML =
+    `📅 Başlangıç: <b>${yil}/${String(ay).padStart(2,'0')}</b> → Bugün: <b>${now3.getFullYear()}/${String(now3.getMonth()+1).padStart(2,'0')}</b><br>
+     👥 Tüm sakinlere bu aralıktaki eksik aylar oluşturulacak`;
+  document.getElementById('borcSonuc').style.display = 'none';
+  showToast('Başlangıç tarihi kaydedildi ✅','success');
+}
+
+function topluBorcOlustur() {
+  const ayar = getAyarlar();
+  const now = new Date();
+  const simdiYil = now.getFullYear();
+  const simdiAy  = now.getMonth() + 1;
+
+  const sakinler = DB.find('users', u => u.rol === 'sakin');
+  let olusturuldu = 0, zatenVar = 0;
+
+  // Başlangıçtan bugüne (bugün dahil) her ayı döngüye al
+  let y = ayar.basYil, m = ayar.basAy;
+  while (y < simdiYil || (y === simdiYil && m <= simdiAy)) {
+    const tutar = getTarife(y, m);
+    sakinler.forEach(s => {
+      const mevcut = DB.findOne('aidatlar', a => a.user_id == s.id && a.yil == y && a.ay == m);
+      if (!mevcut) {
+        DB.insert('aidatlar', {
+          user_id: s.id, yil: y, ay: m,
+          tutar, odenen: 0, durum: 'beklemede',
+          tarih: null, aciklama: ''
+        });
+        olusturuldu++;
+      } else {
+        zatenVar++;
+      }
+    });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+
+  const ayStr = `${ayar.basYil}/${String(ayar.basAy).padStart(2,'0')} → ${simdiYil}/${String(simdiAy).padStart(2,'0')}`;
+  const sonuc = document.getElementById('borcSonuc');
+  sonuc.style.display = 'block';
+  sonuc.innerHTML = `<div style="background:var(--success-light);border-radius:10px;padding:12px;font-size:13px">
+    ✅ <b>${olusturuldu}</b> yeni kayıt oluşturuldu<br>
+    ⏭️ <b>${zatenVar}</b> kayıt zaten mevcuttu<br>
+    📅 Dönem: ${ayStr}<br>
+    👥 Sakin sayısı: ${sakinler.length}
+  </div>`;
+  showToast(`${olusturuldu} kayıt oluşturuldu ✅`, 'success');
+}
+
+function changeSifre() {
+  const s1 = document.getElementById('yeniSifre').value;
+  const s2 = document.getElementById('yeniSifreTekrar').value;
+  if(!s1){showToast('Şifre boş olamaz','error');return;}
+  if(s1!==s2){showToast('Şifreler eşleşmiyor','error');return;}
+  const user = getCurrentUser();
+  DB.update('users', user.id, {sifre:s1});
+  setCurrentUser({...user, sifre:s1});
+  showToast('Şifre değiştirildi ✅','success');
+}
+
+function confirmClear(){ document.getElementById('clearModal').classList.add('active'); }
+</script>
+</body>
+</html>

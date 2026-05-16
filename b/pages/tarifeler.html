@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Aidat Tarifeleri</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<div class="topbar"><div class="topbar-left"><a href="panel.html" class="back-btn">← Geri</a><h1>📅 Tarifeleri</h1></div><button class="btn-logout" onclick="logout()">Çıkış</button></div>
+<div class="container">
+  <button class="btn btn-primary btn-block mb-1" onclick="openModal()">+ Yeni Tarife Ekle</button>
+  <div class="card"><div id="list"><div class="loading"><div class="spinner"></div></div></div></div>
+</div>
+<div class="modal-overlay" id="mo">
+  <div class="modal">
+    <div class="modal-title"><span id="mtitle">Yeni Tarife</span><button class="modal-close" onclick="cm()">✕</button></div>
+    <input type="hidden" id="eid">
+    <p class="text-muted mb-2">Başlangıç-Bitiş aralığındaki tüm aylar için belirtilen tarife oluşturulur.</p>
+    <div class="flex gap-1">
+      <div class="form-group flex-1"><label>Başlangıç Ay/Yıl</label><input type="month" id="fbas" class="form-control"></div>
+      <div class="form-group flex-1"><label>Bitiş Ay/Yıl</label><input type="month" id="fbit" class="form-control"></div>
+    </div>
+    <div class="form-group"><label>Aidat Tutarı (₺)</label><input type="number" id="ftutar" class="form-control" placeholder="200" step="0.01" min="0"></div>
+    <div class="flex gap-1"><button class="btn btn-success flex-1" onclick="save()">💾 Kaydet</button><button class="btn btn-secondary flex-1" onclick="cm()">İptal</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+function load(){
+  const rows=DB.get('tarifeler').sort((a,b)=>a.yil!=b.yil?b.yil-a.yil:b.ay-a.ay);
+  if(!rows.length){document.getElementById('list').innerHTML='<div class="empty-state"><span class="icon">📅</span><p>Tarife yok</p></div>';return;}
+  let h='<div class="table-wrap"><table><thead><tr><th>Dönem</th><th>Tutar (₺)</th><th>İşlem</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+=`<tr><td>${r.yil}/${String(r.ay).padStart(2,'0')}</td><td>₺${parseFloat(r.tutar).toFixed(2)}</td>
+    <td><div class="actions"><button class="btn btn-warning btn-icon" onclick="edit(${r.id})">✏️</button><button class="btn btn-danger btn-icon" onclick="del(${r.id})">🗑️</button></div></td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  document.getElementById('list').innerHTML=h;
+}
+function openModal(d=null){
+  document.getElementById('eid').value=d?d.id:'';
+  document.getElementById('ftutar').value=d?d.tutar:'';
+  document.getElementById('fbas').value=d?`${d.yil}-${String(d.ay).padStart(2,'0')}`:'';
+  document.getElementById('fbit').value='';
+  document.getElementById('mtitle').textContent=d?'Tarifeyi Düzenle':'Yeni Tarife';
+  document.getElementById('mo').classList.add('active');
+}
+function cm(){document.getElementById('mo').classList.remove('active');}
+function edit(id){openModal(DB.findOne('tarifeler',x=>x.id==id));}
+function save(){
+  const eid=document.getElementById('eid').value;
+  const bas=document.getElementById('fbas').value;
+  const bit=document.getElementById('fbit').value;
+  const tutar=parseFloat(document.getElementById('ftutar').value);
+  if(!bas||isNaN(tutar)){showToast('Başlangıç ve tutar zorunlu','error');return;}
+  const[by,bm]=bas.split('-').map(Number);
+  if(eid){
+    DB.update('tarifeler',parseInt(eid),{tutar,yil:by,ay:bm});
+    showToast('Güncellendi ✅','success');
+  } else {
+    let[ey,em]=[by,bm];
+    if(bit){const[a,b]=bit.split('-').map(Number);ey=a;em=b;}
+    let y=by,m=bm;
+    while(y<ey||(y==ey&&m<=em)){
+      const mevcut=DB.findOne('tarifeler',t=>t.yil==y&&t.ay==m);
+      if(mevcut)DB.update('tarifeler',mevcut.id,{tutar});
+      else DB.insert('tarifeler',{yil:y,ay:m,tutar});
+      m++;if(m>12){m=1;y++;}
+    }
+    showToast('Tarife eklendi ✅','success');
+  }
+  cm();load();
+}
+function del(id){if(!confirm('Silinsin mi?'))return;DB.delete('tarifeler',id);showToast('Silindi','success');load();}
+load();
+</script>
+</body></html>
