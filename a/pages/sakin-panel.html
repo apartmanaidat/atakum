@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sakin Paneli</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<div class="topbar">
+  <div class="topbar-left"><span style="font-size:20px">🏢</span><h1 id="topTitle">Aidat Bilgilerim</h1></div>
+  <button class="btn-logout" onclick="logout()">Çıkış</button>
+</div>
+<div id="wDiv"></div>
+<div class="container" id="mainDiv">
+  <div class="loading"><div class="spinner"></div><p>Yükleniyor...</p></div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+const user=requireAuth();
+if(user){
+  const a=getAyarlar();
+  document.getElementById('topTitle').textContent=`Daire ${user.daire_no}`;
+  document.getElementById('wDiv').innerHTML=`<div class="welcome-banner"><h2>👋 Hoş geldiniz, ${user.ad_soyad}</h2><p>Daire ${user.daire_no} • ${a.apartmanAdi}</p></div>`;
+
+  // Doğru borç hesabı: başlangıçtan bugüne her ay tahakkuk - ödenen
+  const satirlar = getSakinBorcDetay(user.id);
+  let tTop=0,tOd=0,tKal=0;
+  satirlar.forEach(r=>{tTop+=r.tutar;tOd+=r.odenen;tKal+=r.kalan;});
+
+  let h=`<div class="debt-box ${tKal<=0?'green':'red'}"><span class="damt">${formatTL(tKal)}</span><span class="dlbl">${tKal<=0?'✅ Tüm Aidatlar Ödenmiş':'⏳ Toplam Kalan Borç'}</span></div>`;
+  h+=`<div class="card"><div class="sum-row"><span>Toplam Tahakkuk:</span><span>${formatTL(tTop)}</span></div><div class="sum-row"><span>Toplam Ödenen:</span><span class="text-success">${formatTL(tOd)}</span></div><div class="sum-row"><span>Kalan:</span><span class="${tKal>0?'text-danger':'text-success'}">${formatTL(tKal)}</span></div></div>`;
+
+  if(satirlar.length){
+    h+='<div class="card"><div class="card-title">📋 Ödeme Durumum</div><div class="table-wrap"><table><thead><tr><th>Dönem</th><th>Aidat</th><th>Ödenen</th><th>Kalan</th><th>Durum</th></tr></thead><tbody>';
+    satirlar.slice().reverse().forEach(r=>{
+      const dur=r.durum==='odendi'?'<span class="badge badge-success">✅</span>':r.durum==='kismi'?'<span class="badge badge-warning">⏳</span>':'<span class="badge badge-danger">✗</span>';
+      h+=`<tr style="${r.durum==='odendi'?'opacity:.6':''}"><td>${r.yil}/${String(r.ay).padStart(2,'0')}</td><td>₺${r.tutar.toFixed(0)}</td><td class="text-success">₺${r.odenen.toFixed(0)}</td><td class="${r.kalan>0?'text-danger':'text-success'}">₺${r.kalan.toFixed(0)}</td><td>${dur}</td></tr>`;
+    });
+    h+='</tbody></table></div></div>';
+
+    // Peşin ödemeler
+    const pesinler = getSakinPesinOdemeler(user.id);
+    if(pesinler.length){
+      h+='<div class="card"><div class="card-title">📅 Peşin Ödemelerim</div><div class="table-wrap"><table><thead><tr><th>Dönem</th><th>Ödenen</th><th>Durum</th></tr></thead><tbody>';
+      pesinler.forEach(p=>{
+        const tar=getTarife(p.yil,p.ay);
+        const od=p.odenen||0;
+        const dur=od>=tar?'<span class="badge badge-success">✅ Peşin</span>':'<span class="badge badge-warning">⏳ Kısmi Peşin</span>';
+        h+=`<tr><td>${p.yil}/${String(p.ay).padStart(2,'0')}</td><td class="text-success">₺${od.toFixed(0)}</td><td>${dur}</td></tr>`;
+      });
+      h+='</tbody></table></div></div>';
+    }
+  } else {
+    h+='<div class="empty-state"><span class="icon">📄</span><p>Henüz dönem başlamadı</p></div>';
+  }
+  document.getElementById('mainDiv').innerHTML=h;
+}
+</script>
+</body></html>

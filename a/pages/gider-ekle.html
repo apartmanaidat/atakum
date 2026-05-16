@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Gider Ekle</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<div class="topbar"><div class="topbar-left"><a href="panel.html" class="back-btn">← Geri</a><h1>🔧 Gider Ekle</h1></div><button class="btn-logout" onclick="logout()">Çıkış</button></div>
+<div class="container">
+  <div class="card">
+    <div class="form-group"><label>Kategori</label>
+      <select id="kat" class="form-control">
+        <option value="">-- Seçiniz --</option>
+        <option>Elektrik</option><option>Su</option><option>Asansör Bakım</option>
+        <option>Temizlikçi</option><option>Temizlik Malzeme</option>
+        <option>Doğalgaz</option><option>Sigorta</option><option>Tamirat</option><option>Diğer</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Tutar (₺)</label><input type="number" id="tutar" class="form-control" placeholder="0.00" step="0.01" min="0"></div>
+    <div class="form-group"><label>Tarih</label><input type="date" id="tarih" class="form-control"></div>
+    <div class="form-group"><label>Açıklama</label><textarea id="acik" class="form-control" rows="2"></textarea></div>
+    <div class="flex gap-1">
+      <button class="btn btn-danger flex-1" onclick="save()">💾 Kaydet</button>
+      <a href="giderler.html" class="btn btn-secondary flex-1">Liste</a>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+document.getElementById('tarih').value=todayStr();
+function save(){
+  const k=document.getElementById('kat').value;
+  const t=parseFloat(document.getElementById('tutar').value);
+  const d=document.getElementById('tarih').value;
+  if(!k||isNaN(t)||!d){showToast('Kategori, tutar ve tarih zorunlu','error');return;}
+  DB.insert('giderler',{kategori:k,tutar:t,tarih:d,aciklama:document.getElementById('acik').value.trim()});
+  showToast('Gider kaydedildi ✅','success');
+  setTimeout(()=>window.location.href='giderler.html',800);
+}
+</script>
+</body></html>

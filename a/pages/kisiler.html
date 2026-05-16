@@ -1,0 +1,67 @@
+<!-- KISILER.HTML -->
+<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Kişiler</title><link rel="stylesheet" href="../css/style.css"></head>
+<body>
+<div class="topbar"><div class="topbar-left"><a href="panel.html" class="back-btn">← Geri</a><h1>👥 Kişiler</h1></div><button class="btn-logout" onclick="logout()">Çıkış</button></div>
+<div class="container">
+  <button class="btn btn-primary btn-block mb-1" onclick="openModal()">+ Yeni Kişi Ekle</button>
+  <div class="card"><div id="list"><div class="loading"><div class="spinner"></div></div></div></div>
+</div>
+<div class="modal-overlay" id="mo">
+  <div class="modal">
+    <div class="modal-title"><span id="mtitle">Yeni Kişi</span><button class="modal-close" onclick="cm()">✕</button></div>
+    <input type="hidden" id="eid">
+    <div class="form-group"><label>Ad Soyad</label><input type="text" id="fas" class="form-control" placeholder="AD SOYAD"></div>
+    <div class="form-group"><label>Daire No</label><input type="number" id="fdn" class="form-control" min="1"></div>
+    <div class="form-group"><label>Telefon (90 ile başlar)</label><input type="text" id="ftel" class="form-control" placeholder="905xxxxxxxxx"></div>
+    <div class="form-group"><label>Şifre</label><input type="text" id="fsif" class="form-control" value="5555"></div>
+    <div class="form-group"><label>Rol</label><select id="frol" class="form-control"><option value="sakin">Sakin</option><option value="yonetici">Yönetici</option></select></div>
+    <div class="flex gap-1"><button class="btn btn-success flex-1" onclick="save()">💾 Kaydet</button><button class="btn btn-secondary flex-1" onclick="cm()">İptal</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+function load(){
+  const users=DB.find('users').sort((a,b)=>a.daire_no-b.daire_no);
+  if(!users.length){document.getElementById('list').innerHTML='<div class="empty-state"><span class="icon">👤</span><p>Kişi yok</p></div>';return;}
+  let h='<div class="table-wrap"><table><thead><tr><th>Daire</th><th>Ad Soyad</th><th>Tel</th><th>Rol</th><th>İşlem</th></tr></thead><tbody>';
+  users.forEach(u=>{
+    h+=`<tr><td><b style="color:var(--primary)">${u.daire_no}</b></td><td style="font-size:11px">${u.ad_soyad}</td><td style="font-size:10px">${u.telefon||'-'}</td>
+    <td><span class="badge ${u.rol==='yonetici'?'badge-warning':'badge-success'}">${u.rol}</span></td>
+    <td><div class="actions"><button class="btn btn-warning btn-icon" onclick="edit(${u.id})">✏️</button><button class="btn btn-danger btn-icon" onclick="del(${u.id},'${u.ad_soyad}')">🗑️</button></div></td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  document.getElementById('list').innerHTML=h;
+}
+function openModal(d=null){
+  document.getElementById('eid').value=d?d.id:'';
+  document.getElementById('fas').value=d?d.ad_soyad:'';
+  document.getElementById('fdn').value=d?d.daire_no:'';
+  document.getElementById('ftel').value=d?d.telefon||'':'';
+  document.getElementById('fsif').value=d?d.sifre:'5555';
+  document.getElementById('frol').value=d?d.rol:'sakin';
+  document.getElementById('mtitle').textContent=d?'Kişiyi Düzenle':'Yeni Kişi';
+  document.getElementById('mo').classList.add('active');
+}
+function cm(){document.getElementById('mo').classList.remove('active');}
+function edit(id){openModal(DB.findOne('users',u=>u.id==id));}
+function save(){
+  const eid=document.getElementById('eid').value;
+  const obj={ad_soyad:document.getElementById('fas').value.trim().toUpperCase(),
+    daire_no:parseInt(document.getElementById('fdn').value),
+    telefon:document.getElementById('ftel').value.trim(),
+    sifre:document.getElementById('fsif').value.trim(),
+    rol:document.getElementById('frol').value};
+  if(!obj.ad_soyad||isNaN(obj.daire_no)){showToast('Ad soyad ve daire no zorunlu','error');return;}
+  if(eid){DB.update('users',parseInt(eid),obj);showToast('Güncellendi ✅','success');}
+  else{DB.insert('users',obj);showToast('Eklendi ✅','success');}
+  cm();load();
+}
+function del(id,name){if(!confirm(name+' silinsin mi?'))return;DB.delete('users',id);showToast('Silindi','success');load();}
+load();
+</script>
+</body></html>

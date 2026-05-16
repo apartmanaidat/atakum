@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Borç & Ödeme</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="panel.html" class="back-btn">← Geri</a>
+    <h1>💳 Borç &amp; Ödeme</h1>
+  </div>
+  <button class="btn-logout" onclick="logout()">Çıkış</button>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="form-group" style="margin-bottom:0">
+      <label>Sakin Seç</label>
+      <select id="sakinSel" class="form-control" onchange="loadBorc()">
+        <option value="">-- Sakin seçin --</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="borcDiv" style="display:none">
+
+    <!-- Borç Tablosu (bugüne kadar olan aylar) -->
+    <div class="card">
+      <div class="card-title">📋 Borç Listesi <span id="donemBilgi" style="font-size:11px;color:var(--gray-400);font-weight:400"></span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dönem</th><th>Aidat</th><th>Ödenen</th><th>Kalan</th><th>Durum</th></tr></thead>
+          <tbody id="borcTbody"></tbody>
+        </table>
+      </div>
+      <div class="divider"></div>
+      <div id="borcSum"></div>
+    </div>
+
+    <!-- Peşin ödemeler (varsa) -->
+    <div class="card" id="pesinCard" style="display:none">
+      <div class="card-title">📅 Peşin Ödemeler (Gelecek Aylar)</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dönem</th><th>Aidat</th><th>Ödenen</th><th>Kalan</th><th>Durum</th></tr></thead>
+          <tbody id="pesinTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Toplam kalan kutusu -->
+    <div id="toplamKalanDiv"></div>
+
+    <!-- Ödeme Formu -->
+    <div class="card">
+      <div class="card-title">💳 Ödeme Yap</div>
+      <div style="background:var(--primary-light);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--primary-dark)">
+        ℹ️ Önce borçlu aylar ödenir. Fazla ödeme gelecek aylara <b>peşin</b> olarak dağıtılır.
+      </div>
+      <div class="form-group">
+        <label>Ödeme Tutarı (₺)</label>
+        <input type="number" id="odemeTutar" class="form-control" placeholder="0.00" step="0.01" min="0" oninput="preview()">
+      </div>
+
+      <div id="previewDiv" style="display:none">
+        <div style="font-size:12px;font-weight:800;color:var(--gray-600);margin-bottom:6px">📊 Dağılım Önizleme</div>
+        <div id="previewItems" style="background:var(--gray-50);border-radius:10px;padding:10px"></div>
+      </div>
+
+      <div class="flex gap-1 mt-2">
+        <button class="btn btn-success flex-1" onclick="odemeYap()">💾 Ödemeyi Kaydet</button>
+        <button class="btn btn-whatsapp" id="waBtn" style="display:none" onclick="sendWA()">📱 WA</button>
+      </div>
+    </div>
+
+    <!-- Sonuç -->
+    <div class="card" id="distCard" style="display:none">
+      <div class="card-title">✅ Ödeme Kaydedildi</div>
+      <div id="distItems"></div>
+      <div class="divider"></div>
+      <div id="distSum"></div>
+      <button class="btn btn-whatsapp btn-block mt-2" onclick="sendWA()">📱 WhatsApp ile Paylaş</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="../js/db.js"></script>
+<script>
+requireAdmin();
+
+let currentSakinId = null;
+let borcSatirlar   = [];   // Bugüne kadar borçlu satırlar (kalan > 0)
+let gelecekAylar   = [];   // Henüz kaydı olmayan gelecek aylar
+let lastDist       = null;
+
+// Sakin dropdown doldur
+DB.find('users', u => u.rol === 'sakin')
+  .sort((a, b) => a.daire_no - b.daire_no)
+  .forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = `${u.daire_no} - ${u.ad_soyad}`;
+    document.getElementById('sakinSel').appendChild(o);
+  });
+
+function loadBorc() {
+  const sid = parseInt(document.getElementById('sakinSel').value);
+  if (!sid) { document.getElementById('borcDiv').style.display = 'none'; return; }
+  currentSakinId = sid;
+
+  const now = new Date();
+  const simdiYil = now.getFullYear();
+  const simdiAy  = now.getMonth() + 1;
+
+  // ── Tüm geçmiş+bugün aylarını hesapla ──
+  const tumSatirlar = getSakinBorcDetay(sid);
+
+  // Sadece borçlu olanlar (kalan > 0)
+  borcSatirlar = tumSatirlar.filter(s => s.kalan > 0);
+
+  // Peşin ödemeler (gelecek aylar, odenen > 0)
+  const pesinler = getSakinPesinOdemeler(sid);
+
+  // Gelecek aylar: bugünden itibaren kayıt olmayan aylar (ödeme için)
+  gelecekAylar = [];
+  let gy = simdiYil, gm = simdiAy + 1;
+  if (gm > 12) { gm = 1; gy++; }
+  for (let i = 0; i < 24; i++) {
+    const mevcut = DB.findOne('aidatlar', a => a.user_id == sid && a.yil == gy && a.ay == gm);
+    if (!mevcut) gelecekAylar.push({ yil: gy, ay: gm, tutar: getTarife(gy, gm) });
+    gm++; if (gm > 12) { gm = 1; gy++; }
+  }
+
+  lastDist = null;
+  document.getElementById('distCard').style.display = 'none';
+  document.getElementById('waBtn').style.display = 'none';
+  document.getElementById('odemeTutar').value = '';
+  document.getElementById('previewDiv').style.display = 'none';
+
+  // ── Borç dönemi bilgisi ──
+  const ayar = getAyarlar();
+  document.getElementById('donemBilgi').textContent =
+    `(${ayar.basYil}/${String(ayar.basAy).padStart(2,'0')} → ${simdiYil}/${String(simdiAy).padStart(2,'0')})`;
+
+  // ── Render borç tablosu — TÜM SATIRLAR (borçlu + ödenmiş) ──
+  let topAidat = 0, topOdenen = 0, topKalan = 0;
+  let rows = '';
+  tumSatirlar.forEach(s => {
+    topAidat  += s.tutar;
+    topOdenen += s.odenen;
+    topKalan  += s.kalan;
+    const dur = s.durum === 'odendi'
+      ? '<span class="badge badge-success">✅ Ödendi</span>'
+      : s.durum === 'kismi'
+        ? '<span class="badge badge-warning">⏳ Kısmi</span>'
+        : '<span class="badge badge-danger">✗ Bekl.</span>';
+    rows += `<tr style="${s.durum==='odendi'?'opacity:.6':''}">
+      <td>${s.yil}/${String(s.ay).padStart(2,'0')}</td>
+      <td>${formatTL(s.tutar)}</td>
+      <td>${formatTL(s.odenen)}</td>
+      <td><b>${formatTL(s.kalan)}</b></td>
+      <td>${dur}</td>
+    </tr>`;
+  });
+  if (!rows) rows = '<tr><td colspan="5" class="text-center text-muted" style="padding:12px">Henüz dönem başlamadı</td></tr>';
+  document.getElementById('borcTbody').innerHTML = rows;
+
+  document.getElementById('borcSum').innerHTML = `
+    <div class="sum-row"><span>Toplam Tahakkuk:</span><span>${formatTL(topAidat)}</span></div>
+    <div class="sum-row"><span>Toplam Ödenen:</span><span class="text-success">${formatTL(topOdenen)}</span></div>
+    <div class="sum-row"><span>Toplam Kalan Borç:</span><span class="text-danger">${formatTL(topKalan)}</span></div>
+  `;
+
+  // ── Peşin ödemeler tablosu ──
+  if (pesinler.length > 0) {
+    let ph = '';
+    pesinler.forEach(p => {
+      const tar = getTarife(p.yil, p.ay);
+      const od  = p.odenen || 0;
+      const kal = Math.max(0, tar - od);
+      const dur = kal <= 0
+        ? '<span class="badge badge-success">✅ Peşin Ödendi</span>'
+        : '<span class="badge badge-warning">⏳ Kısmi Peşin</span>';
+      ph += `<tr>
+        <td>${p.yil}/${String(p.ay).padStart(2,'0')}</td>
+        <td>${formatTL(tar)}</td>
+        <td class="text-success">${formatTL(od)}</td>
+        <td>${formatTL(kal)}</td>
+        <td>${dur}</td>
+      </tr>`;
+    });
+    document.getElementById('pesinTbody').innerHTML = ph;
+    document.getElementById('pesinCard').style.display = 'block';
+  } else {
+    document.getElementById('pesinCard').style.display = 'none';
+  }
+
+  // ── Toplam kalan kutusu ──
+  const cls = topKalan <= 0 ? 'green' : 'red';
+  document.getElementById('toplamKalanDiv').innerHTML = `
+    <div class="debt-box ${cls}">
+      <span class="damt">${formatTL(topKalan)}</span>
+      <span class="dlbl">${topKalan <= 0
+        ? '✅ Tüm Borçlar Ödenmiş — Peşin Ödeme Yapılabilir'
+        : '⏳ Toplam Kalan Borç'}</span>
+    </div>`;
+
+  document.getElementById('borcDiv').style.display = 'block';
+}
+
+// ── Ödeme dağılımını hesapla ──
+function calcDist(tutar) {
+  let kalan = tutar;
+  const dist = [];
+
+  // 1) Önce borçlu aylar (bugüne kadar, kalan > 0)
+  for (const s of borcSatirlar) {
+    if (kalan <= 0) break;
+    const odeniyor = Math.min(kalan, s.kalan);
+    dist.push({
+      tip: 'borc',
+      kayitId: s.kayitId,
+      yil: s.yil, ay: s.ay,
+      ayAidat: s.tutar,
+      mevcutOdenen: s.odenen,
+      odeniyor,
+      yeniOdenen: s.odenen + odeniyor,
+      yeniDurum: s.odenen + odeniyor >= s.tutar ? 'odendi' : 'kismi'
+    });
+    kalan -= odeniyor;
+  }
+
+  // 2) Sonra gelecek aylar (peşin)
+  for (const g of gelecekAylar) {
+    if (kalan <= 0) break;
+    const odeniyor = Math.min(kalan, g.tutar);
+    dist.push({
+      tip: 'gelecek',
+      kayitId: null,
+      yil: g.yil, ay: g.ay,
+      ayAidat: g.tutar,
+      mevcutOdenen: 0,
+      odeniyor,
+      yeniOdenen: odeniyor,
+      yeniDurum: odeniyor >= g.tutar ? 'odendi' : 'kismi'
+    });
+    kalan -= odeniyor;
+  }
+
+  return { dist, fazla: kalan };
+}
+
+function preview() {
+  const t = parseFloat(document.getElementById('odemeTutar').value);
+  if (!t || t <= 0) { document.getElementById('previewDiv').style.display='none'; return; }
+  const { dist, fazla } = calcDist(t);
+  let h = '';
+  dist.forEach(item => {
+    const p   = `${item.yil}/${String(item.ay).padStart(2,'0')}`;
+    const tag = item.tip === 'gelecek'
+      ? ' <span class="badge badge-gray" style="font-size:10px;vertical-align:middle">Peşin</span>' : '';
+    h += `<div class="pay-item">
+      <span>${p}${tag}</span>
+      <span>${formatTL(item.odeniyor)} ${item.yeniDurum==='odendi'?'✅':'⏳'}</span>
+    </div>`;
+  });
+  if (fazla > 0.005) h += `<div class="pay-item" style="color:var(--warning)"><span>⚠️ 24 ay aşıldı (dağıtılamadı)</span><span>+${formatTL(fazla)}</span></div>`;
+  if (!h) h = '<p class="text-muted text-center" style="font-size:12px">Dağıtılacak ay yok</p>';
+  document.getElementById('previewItems').innerHTML = h;
+  document.getElementById('previewDiv').style.display = 'block';
+}
+
+function odemeYap() {
+  const sid = currentSakinId;
+  const t   = parseFloat(document.getElementById('odemeTutar').value);
+  if (!sid || !t || t <= 0) { showToast('Sakin ve tutar giriniz','error'); return; }
+  const { dist, fazla } = calcDist(t);
+  if (!dist.length) { showToast('Dağıtılacak ay bulunamadı','error'); return; }
+
+  const now = new Date().toISOString();
+
+  dist.forEach(item => {
+    if (item.tip === 'borc') {
+      if (item.kayitId) {
+        // Mevcut kayıt güncelle
+        DB.update('aidatlar', item.kayitId, {
+          odenen: item.yeniOdenen,
+          durum:  item.yeniDurum,
+          tarih:  now,
+          aciklama: `+${item.odeniyor.toFixed(2)}`
+        });
+      } else {
+        // Kayıt yoktu, yeni oluştur
+        DB.insert('aidatlar', {
+          user_id: sid, yil: item.yil, ay: item.ay,
+          tutar: item.ayAidat, odenen: item.yeniOdenen,
+          durum: item.yeniDurum, tarih: now,
+          aciklama: item.odeniyor.toFixed(2)
+        });
+      }
+    } else {
+      // Peşin — yeni kayıt
+      DB.insert('aidatlar', {
+        user_id: sid, yil: item.yil, ay: item.ay,
+        tutar: item.ayAidat, odenen: item.yeniOdenen,
+        durum: item.yeniDurum, tarih: now,
+        aciklama: `Peşin→${item.odeniyor.toFixed(2)}`
+      });
+    }
+  });
+
+  const sakin = DB.findOne('users', u => u.id == sid);
+  lastDist = { dist, fazla, t, sakin, now };
+
+  // Sonuç render
+  let h = '';
+  dist.forEach(item => {
+    const p   = `${item.yil}/${String(item.ay).padStart(2,'0')}`;
+    const tag = item.tip === 'gelecek'
+      ? ' <span class="badge badge-gray" style="font-size:10px">Peşin</span>' : '';
+    h += `<div class="pay-item">
+      <span>${p}${tag} → ${formatTL(item.ayAidat)}</span>
+      <span class="${item.yeniDurum==='odendi'?'text-success':'text-danger'}">${formatTL(item.odeniyor)} ${item.yeniDurum==='odendi'?'✅':'⏳'}</span>
+    </div>`;
+  });
+  document.getElementById('distItems').innerHTML = h;
+
+  // Yeni borç durumunu hesapla
+  const yeniBorcSatirlar = getSakinBorcDetay(sid);
+  let yeniTopKalan = 0;
+  yeniBorcSatirlar.forEach(s => yeniTopKalan += s.kalan);
+
+  document.getElementById('distSum').innerHTML = `
+    <div class="sum-row"><span>Toplam Ödeme:</span><span class="text-success">${formatTL(t)}</span></div>
+    ${fazla > 0.005 ? `<div class="sum-row"><span>Dağıtılamayan:</span><span style="color:var(--warning)">${formatTL(fazla)}</span></div>` : ''}
+    <div class="sum-row"><span>Güncel Kalan Borç:</span><span class="${yeniTopKalan>0?'text-danger':'text-success'}">${yeniTopKalan>0?formatTL(yeniTopKalan):'Temiz ✅'}</span></div>
+  `;
+  document.getElementById('distCard').style.display = 'block';
+  document.getElementById('waBtn').style.display = 'flex';
+  showToast('Ödeme kaydedildi ✅','success');
+  loadBorc();
+}
+
+function sendWA() {
+  if (!lastDist) return;
+  const { dist, fazla, t, sakin, now } = lastDist;
+  const date = new Date(now).toLocaleString('tr-TR');
+
+  const yeniBorcSatirlar = getSakinBorcDetay(sakin.id);
+  let yeniTopKalan = 0;
+  yeniBorcSatirlar.forEach(s => yeniTopKalan += s.kalan);
+
+  const distLines = dist.map(i => {
+    const p   = `${i.yil}/${String(i.ay).padStart(2,'0')}`;
+    const tip = i.tip==='gelecek' ? ' (peşin)' : '';
+    return `  ${p}${tip} → ₺${i.odeniyor.toFixed(2)} → ${i.yeniDurum==='odendi'?'ödendi':'kısmi'}`;
+  }).join('\n');
+
+  const msg =
+    `Sayın ${sakin.ad_soyad} - Daire ${sakin.daire_no}\n`
+    + `Aidat Ödeme Bilgileri 🏢\n`
+    + `Ödeme Tarihi: ${date}\n\n`
+    + `Ödeme Dağılımı:\n${distLines}\n\n`
+    + `Toplam Ödeme: ₺${t.toFixed(2)}\n`
+    + (yeniTopKalan > 0
+        ? `Kalan Borç: ₺${yeniTopKalan.toFixed(2)}`
+        : 'Tüm borçlar ödendi ✅')
+    + `\n\nTeşekkür eder, sağlıklı günler dileriz.`;
+
+  window.open(`https://wa.me/${sakin.telefon}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+</script>
+</body>
+</html>
