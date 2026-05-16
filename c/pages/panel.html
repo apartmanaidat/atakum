@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Yönetim Paneli</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <span style="font-size:20px">🏢</span>
+    <h1 id="topAdi">Yönetim Paneli</h1>
+  </div>
+  <button class="btn-logout" onclick="logout()">Çıkış</button>
+</div>
+
+<div id="welcomeDiv"></div>
+
+<!-- ANA MENÜ -->
+<div class="panel-grid">
+  <a href="borc-odeme.html" class="panel-btn c-blue">
+    <span class="panel-icon">💳</span><span class="panel-label">Borç &amp; Toplu Ödeme</span>
+  </a>
+  <a href="aidatlar.html" class="panel-btn c-blue">
+    <span class="panel-icon">📄</span><span class="panel-label">Aidat Listesi</span>
+  </a>
+  <a href="gelir-ekle.html" class="panel-btn c-green">
+    <span class="panel-icon">💰</span><span class="panel-label">Gelir Ekle</span>
+  </a>
+  <a href="gelirler.html" class="panel-btn c-green">
+    <span class="panel-icon">📋</span><span class="panel-label">Gelirler Listesi</span>
+  </a>
+  <a href="gider-ekle.html" class="panel-btn c-red">
+    <span class="panel-icon">🔧</span><span class="panel-label">Gider Ekle</span>
+  </a>
+  <a href="giderler.html" class="panel-btn c-red">
+    <span class="panel-icon">📋</span><span class="panel-label">Giderler Listesi</span>
+  </a>
+  <a href="kisiler.html" class="panel-btn c-gray">
+    <span class="panel-icon">👥</span><span class="panel-label">Kişiler</span>
+  </a>
+  <a href="raporlar.html" class="panel-btn c-gray">
+    <span class="panel-icon">📊</span><span class="panel-label">Raporlar</span>
+  </a>
+  <a href="tarifeler.html" class="panel-btn c-yellow span2">
+    <span class="panel-icon">📅</span><span class="panel-label">Aidat Tarifeleri</span>
+  </a>
+  <a href="ayarlar.html" class="panel-btn c-gray span2">
+    <span class="panel-icon">⚙️</span><span class="panel-label">Ayarlar</span>
+  </a>
+</div>
+
+<!-- VERİ YÖNETİMİ -->
+<div class="data-mgmt no-print">
+  <div class="title">🗄️ Veri Yönetimi</div>
+  <div class="btn-row">
+    <button class="btn btn-success btn-sm" onclick="exportAllData()">📤 Dışa Aktar</button>
+    <button class="btn btn-primary btn-sm" onclick="document.getElementById('importFile').click()">📥 İçe Aktar</button>
+    <button class="btn btn-danger btn-sm" onclick="confirmClear()">🗑️ Temizle</button>
+  </div>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importAllData(this.files[0])">
+  <p style="color:#9ca3af;font-size:11px;margin-top:8px">
+    📤 Dışa Aktar: Tüm verileri JSON dosyasına kaydet<br>
+    📥 İçe Aktar: Başka cihazdan aldığınız JSON dosyasını yükle<br>
+    🗑️ Temizle: Tüm verileri sil (geri alınamaz!)
+  </p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⚠️ Dikkat!</span>
+      <button class="modal-close" onclick="document.getElementById('clearModal').classList.remove('active')">✕</button>
+    </div>
+    <p style="margin-bottom:16px;color:var(--danger);font-weight:700">Tüm veriler silinecek! Bu işlem geri alınamaz.</p>
+    <div class="flex gap-1">
+      <button class="btn btn-danger flex-1" onclick="clearAllData()">Evet, Sil</button>
+      <button class="btn btn-secondary flex-1" onclick="document.getElementById('clearModal').classList.remove('active')">İptal</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/db.js"></script>
+<script>
+const user = requireAdmin();
+if(user) {
+  const a = getAyarlar();
+  document.getElementById('topAdi').textContent = a.apartmanAdi;
+  document.getElementById('welcomeDiv').innerHTML = `
+    <div class="welcome-banner">
+      <h2>👋 Hoş geldiniz, ${user.ad_soyad}</h2>
+      <p>Yönetici Paneli • Sistem Başlangıcı: ${a.basYil}/${String(a.basAy).padStart(2,'0')}</p>
+    </div>`;
+}
+function confirmClear() {
+  document.getElementById('clearModal').classList.add('active');
+}
+</script>
+</body>
+</html>
