@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Apartman Sistemi - Giriş</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="icon">🏢</span>
+      <h1 id="aptAdi">Apartman Sistemi</h1>
+      <p>Aidat ve Yönetim Programı</p>
+    </div>
+    <div class="form-group">
+      <label>Daire No / Kullanıcı</label>
+      <input type="number" id="daireNo" class="form-control" placeholder="0 = Yönetici" min="0" autofocus>
+    </div>
+    <div class="form-group">
+      <label>Şifre</label>
+      <input type="password" id="sifre" class="form-control" placeholder="Şifrenizi girin">
+    </div>
+    <button class="btn btn-primary btn-block" style="padding:13px" onclick="login()">🔑 Giriş Yap</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="js/db.js"></script>
+<script>
+  document.getElementById('aptAdi').textContent = getAyarlar().apartmanAdi;
+  document.getElementById('sifre').addEventListener('keypress', e => { if(e.key==='Enter') login(); });
+  document.getElementById('daireNo').addEventListener('keypress', e => { if(e.key==='Enter') document.getElementById('sifre').focus(); });
+
+  function login() {
+    const no = parseInt(document.getElementById('daireNo').value);
+    const sifre = document.getElementById('sifre').value.trim();
+    if(isNaN(no) || !sifre) { showToast('Daire no ve şifre giriniz','error'); return; }
+    const user = DB.findOne('users', u => u.daire_no==no && u.sifre==sifre);
+    if(!user) { showToast('Hatalı daire no veya şifre!','error'); return; }
+    setCurrentUser(user);
+    window.location.href = user.rol==='yonetici' ? 'pages/panel.html' : 'pages/sakin-panel.html';
+  }
+</script>
+</body>
+</html>
